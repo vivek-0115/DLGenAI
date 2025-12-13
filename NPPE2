@@ -1,0 +1,2013 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "984f483f",
+   "metadata": {
+    "papermill": {
+     "duration": 0.00768,
+     "end_time": "2025-12-13T12:23:15.293415",
+     "exception": false,
+     "start_time": "2025-12-13T12:23:15.285735",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Libraries and imports"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "6b3f876c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:23:15.310519Z",
+     "iopub.status.busy": "2025-12-13T12:23:15.309709Z",
+     "iopub.status.idle": "2025-12-13T12:24:23.740451Z",
+     "shell.execute_reply": "2025-12-13T12:24:23.739291Z"
+    },
+    "papermill": {
+     "duration": 68.447739,
+     "end_time": "2025-12-13T12:24:23.749271",
+     "exception": false,
+     "start_time": "2025-12-13T12:23:15.301532",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Note: you may need to restart the kernel to use updated packages.\n"
+     ]
+    }
+   ],
+   "source": [
+    "pip install trackio -qqq > /dev/null 2>&1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "fe6153ec",
+   "metadata": {
+    "_cell_guid": "b1076dfc-b9ad-4769-8c92-a6c4dae69d19",
+    "_uuid": "8f2839f25d086af736a60e9eeb907d3b93b6e0e5",
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:23.764618Z",
+     "iopub.status.busy": "2025-12-13T12:24:23.764077Z",
+     "iopub.status.idle": "2025-12-13T12:24:37.393151Z",
+     "shell.execute_reply": "2025-12-13T12:24:37.392279Z"
+    },
+    "papermill": {
+     "duration": 13.63876,
+     "end_time": "2025-12-13T12:24:37.395007",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:23.756247",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "All Imports Done, Good to go....\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os\n",
+    "import trackio\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "import string\n",
+    "from tqdm import tqdm\n",
+    "import json\n",
+    "import torch\n",
+    "import torch.nn as nn\n",
+    "import subprocess\n",
+    "from torch.nn.utils.rnn import pad_sequence\n",
+    "from torch.utils.data import Dataset, DataLoader\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.metrics import f1_score\n",
+    "\n",
+    "from huggingface_hub import login, HfApi\n",
+    "from kaggle_secrets import UserSecretsClient\n",
+    "import kagglehub\n",
+    "\n",
+    "print(\"All Imports Done, Good to go....\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "c5d9f809",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:37.411415Z",
+     "iopub.status.busy": "2025-12-13T12:24:37.410902Z",
+     "iopub.status.idle": "2025-12-13T12:24:37.684824Z",
+     "shell.execute_reply": "2025-12-13T12:24:37.683923Z"
+    },
+    "papermill": {
+     "duration": 0.283429,
+     "end_time": "2025-12-13T12:24:37.686559",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:37.403130",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Kaggle Hub authenticated as: vivek0620\n"
+     ]
+    }
+   ],
+   "source": [
+    "user_secrets = UserSecretsClient()\n",
+    "\n",
+    "# ---- Hugging Face ----\n",
+    "hf_token = user_secrets.get_secret(\"HF_TOKEN\")\n",
+    "login(token=hf_token)\n",
+    "\n",
+    "# ---- Kaggle ----\n",
+    "api_token = user_secrets.get_secret(\"KAGGLE_JSON\")\n",
+    "json.loads(api_token)  # validate JSON\n",
+    "\n",
+    "os.makedirs(\"/root/.kaggle\", exist_ok=True)\n",
+    "with open(\"/root/.kaggle/kaggle.json\", \"w\") as f:\n",
+    "    f.write(api_token)\n",
+    "\n",
+    "os.chmod(\"/root/.kaggle/kaggle.json\", 0o600)\n",
+    "os.environ[\"KAGGLE_CONFIG_DIR\"] = \"/root/.kaggle\"\n",
+    "\n",
+    "print(\"Kaggle Hub authenticated as:\", kagglehub.whoami()[\"username\"])"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "aa13ea13",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007164,
+     "end_time": "2025-12-13T12:24:37.701085",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:37.693921",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Creating DataFrame"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "728e81a2",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:37.716240Z",
+     "iopub.status.busy": "2025-12-13T12:24:37.715968Z",
+     "iopub.status.idle": "2025-12-13T12:24:37.933392Z",
+     "shell.execute_reply": "2025-12-13T12:24:37.932383Z"
+    },
+    "papermill": {
+     "duration": 0.227358,
+     "end_time": "2025-12-13T12:24:37.935247",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:37.707889",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train samples: 6535\n",
+      "Val samples: 727\n",
+      "Data Loaded Successfully.\n"
+     ]
+    }
+   ],
+   "source": [
+    "sampleSumbPath = '/kaggle/input/sep-25-dl-gen-ai-nppe-2/sample_submission.csv'\n",
+    "trainingDataPath = '/kaggle/input/sep-25-dl-gen-ai-nppe-2/train.csv'\n",
+    "testingDataPath = '/kaggle/input/sep-25-dl-gen-ai-nppe-2/test.csv'\n",
+    "\n",
+    "trainDf = pd.read_csv(trainingDataPath)\n",
+    "testDf = pd.read_csv(testingDataPath)\n",
+    "sampleDf = pd.read_csv(sampleSumbPath)\n",
+    "\n",
+    "trainDf, valDf = train_test_split(trainDf, test_size=0.1, random_state=42)\n",
+    "\n",
+    "print(\"Train samples:\", len(trainDf))\n",
+    "print(\"Val samples:\", len(valDf))\n",
+    "\n",
+    "\n",
+    "print(\"Data Loaded Successfully.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "9a482f95",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:37.951796Z",
+     "iopub.status.busy": "2025-12-13T12:24:37.951535Z",
+     "iopub.status.idle": "2025-12-13T12:24:37.966891Z",
+     "shell.execute_reply": "2025-12-13T12:24:37.966066Z"
+    },
+    "papermill": {
+     "duration": 0.025547,
+     "end_time": "2025-12-13T12:24:37.968676",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:37.943129",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Training Data....\n",
+      "\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>id</th>\n",
+       "      <th>seq</th>\n",
+       "      <th>sst8</th>\n",
+       "      <th>sst3</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>3071</th>\n",
+       "      <td>3071</td>\n",
+       "      <td>WFDPLSYRYTNTRHWDHNGDVWAAVGRLFRLVPPLPCAEALDAAAA...</td>\n",
+       "      <td>CCSCCCCTTTCHHHHHHHHHHHHHHHHHHHHHHHCCCHHHHHHHHH...</td>\n",
+       "      <td>CCCCCCCCCCCHHHHHHHHHHHHHHHHHHHHHHHCCCHHHHHHHHH...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1699</th>\n",
+       "      <td>1699</td>\n",
+       "      <td>HYRPCDASQGTCRDDPMDGRPIRCITRKKKFKCQECCLGEGCQAGP...</td>\n",
+       "      <td>CCSCCSSCSSCCEECBCSSSCCEEECTTCCEETTEETTSSSCCCTT...</td>\n",
+       "      <td>CCCCCCCCCCCCEECECCCCCCEEECCCCCEECCEECCCCCCCCCC...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>592</th>\n",
+       "      <td>592</td>\n",
+       "      <td>VLPGWFVKNTSDGDNMFFDSGAIVFEELSLLGDNNTDIADFSAPAM...</td>\n",
+       "      <td>CCSSTTGGGGCCSSCHHHHHHHHHHHHHEECSSCTTCHHHHHHHHS...</td>\n",
+       "      <td>CCCCCCHHHHCCCCCHHHHHHHHHHHHHEECCCCCCCHHHHHHHHC...</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "        id                                                seq  \\\n",
+       "3071  3071  WFDPLSYRYTNTRHWDHNGDVWAAVGRLFRLVPPLPCAEALDAAAA...   \n",
+       "1699  1699  HYRPCDASQGTCRDDPMDGRPIRCITRKKKFKCQECCLGEGCQAGP...   \n",
+       "592    592  VLPGWFVKNTSDGDNMFFDSGAIVFEELSLLGDNNTDIADFSAPAM...   \n",
+       "\n",
+       "                                                   sst8  \\\n",
+       "3071  CCSCCCCTTTCHHHHHHHHHHHHHHHHHHHHHHHCCCHHHHHHHHH...   \n",
+       "1699  CCSCCSSCSSCCEECBCSSSCCEEECTTCCEETTEETTSSSCCCTT...   \n",
+       "592   CCSSTTGGGGCCSSCHHHHHHHHHHHHHEECSSCTTCHHHHHHHHS...   \n",
+       "\n",
+       "                                                   sst3  \n",
+       "3071  CCCCCCCCCCCHHHHHHHHHHHHHHHHHHHHHHHCCCHHHHHHHHH...  \n",
+       "1699  CCCCCCCCCCCCEECECCCCCCEEECCCCCEECCEECCCCCCCCCC...  \n",
+       "592   CCCCCCHHHHCCCCCHHHHHHHHHHHHHEECCCCCCCHHHHHHHHC...  "
+      ]
+     },
+     "execution_count": 5,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "print(\"Training Data....\\n\")\n",
+    "trainDf.head(3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "597c78c3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:37.985822Z",
+     "iopub.status.busy": "2025-12-13T12:24:37.985582Z",
+     "iopub.status.idle": "2025-12-13T12:24:37.992963Z",
+     "shell.execute_reply": "2025-12-13T12:24:37.992185Z"
+    },
+    "papermill": {
+     "duration": 0.018405,
+     "end_time": "2025-12-13T12:24:37.994738",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:37.976333",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Testing data....\n",
+      "\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>id</th>\n",
+       "      <th>seq</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>0</td>\n",
+       "      <td>FFKGSYQKVSNQLLYQANQIQDQTGTITIIRDESGELPEDIKISAG...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>1</td>\n",
+       "      <td>ATTKKNSPFPKVEEAYVSGDANITLFIKRGAHIAQNISSPYVGLDK...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>2</td>\n",
+       "      <td>VRALMLELRSGVREALDALGGVWEITKYLFMVDVPNLESELAFLQR...</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   id                                                seq\n",
+       "0   0  FFKGSYQKVSNQLLYQANQIQDQTGTITIIRDESGELPEDIKISAG...\n",
+       "1   1  ATTKKNSPFPKVEEAYVSGDANITLFIKRGAHIAQNISSPYVGLDK...\n",
+       "2   2  VRALMLELRSGVREALDALGGVWEITKYLFMVDVPNLESELAFLQR..."
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "print(\"Testing data....\\n\")\n",
+    "testDf.head(3)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2077fad9",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007611,
+     "end_time": "2025-12-13T12:24:38.010269",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.002658",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Data Encoding"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "b799a378",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.026615Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.026378Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.031308Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.030566Z"
+    },
+    "papermill": {
+     "duration": 0.0147,
+     "end_time": "2025-12-13T12:24:38.032828",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.018128",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "# 20 standard AAs + X (unknown)\n",
+    "AAs = list(\"ACDEFGHIKLMNPQRSTVWY\")\n",
+    "aa2id = {a:i+1 for i,a in enumerate(AAs)}\n",
+    "aa2id[\"X\"] = len(aa2id)+1\n",
+    "\n",
+    "sst8_chars = list(\"CH ESTBIG\".replace(\" \", \"\"))\n",
+    "sst3_chars = list(\"CHE\")\n",
+    "\n",
+    "# Mapping\n",
+    "sst8_map = {c:i for i,c in enumerate(sst8_chars)}\n",
+    "sst3_map = {c:i for i,c in enumerate(sst3_chars)}\n",
+    "\n",
+    "# Reverse Mapping\n",
+    "id2sst8 = {i:c for c,i in sst8_map.items()}\n",
+    "id2sst3 = {i:c for c,i in sst3_map.items()}"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "60bf4211",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007159,
+     "end_time": "2025-12-13T12:24:38.047414",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.040255",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Dataset & Dataloader"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "c5abc5ed",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.063265Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.063007Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.071676Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.071031Z"
+    },
+    "papermill": {
+     "duration": 0.018523,
+     "end_time": "2025-12-13T12:24:38.073157",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.054634",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "class ProteinDataset(Dataset):\n",
+    "    def __init__(self, df):\n",
+    "        self.seq = df[\"seq\"].tolist()\n",
+    "        self.s8 = df[\"sst8\"].tolist()\n",
+    "        self.s3 = df[\"sst3\"].tolist()\n",
+    "\n",
+    "    def __getitem__(self, idx):\n",
+    "        x = torch.tensor([aa2id.get(a, aa2id[\"X\"]) for a in self.seq[idx]])\n",
+    "        y8 = torch.tensor([sst8_map[c] for c in self.s8[idx]])\n",
+    "        y3 = torch.tensor([sst3_map[c] for c in self.s3[idx]])\n",
+    "        return x, y8, y3\n",
+    "\n",
+    "    def __len__(self):\n",
+    "        return len(self.seq)\n",
+    "\n",
+    "\n",
+    "def collate(batch):\n",
+    "    xs, y8s, y3s = zip(*batch)\n",
+    "    xs = pad_sequence(xs, batch_first=True, padding_value=0)\n",
+    "    y8s = pad_sequence(y8s, batch_first=True, padding_value=-1)\n",
+    "    y3s = pad_sequence(y3s, batch_first=True, padding_value=-1)\n",
+    "    return xs, y8s, y3s\n",
+    "\n",
+    "\n",
+    "trainDs = ProteinDataset(trainDf)\n",
+    "trainLoader = DataLoader(trainDs, batch_size=1, shuffle=True, collate_fn=collate)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "id": "fa02e933",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.088381Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.088121Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.092896Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.092198Z"
+    },
+    "papermill": {
+     "duration": 0.014327,
+     "end_time": "2025-12-13T12:24:38.094531",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.080204",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "trainDs = ProteinDataset(trainDf)\n",
+    "valDs   = ProteinDataset(valDf)\n",
+    "\n",
+    "trainLoader = DataLoader(trainDs, batch_size=1, shuffle=True, collate_fn=collate)\n",
+    "valLoader   = DataLoader(valDs,   batch_size=1, shuffle=False, collate_fn=collate)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "0ba55e95",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.109886Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.109651Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.226599Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.225693Z"
+    },
+    "papermill": {
+     "duration": 0.126319,
+     "end_time": "2025-12-13T12:24:38.228084",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.101765",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Batch 0:\n",
+      "  xs : torch.Size([1, 275])\n",
+      "  y8 : torch.Size([1, 275])\n",
+      "  y3 : torch.Size([1, 275])\n",
+      "\n"
+     ]
+    }
+   ],
+   "source": [
+    "for i, (xs, y8s, y3s) in enumerate(trainLoader):\n",
+    "    print(f\"Batch {i}:\")\n",
+    "    print(\"  xs :\", xs.shape)\n",
+    "    print(\"  y8 :\", y8s.shape)\n",
+    "    print(\"  y3 :\", y3s.shape)\n",
+    "    print()\n",
+    "    if i == 0:\n",
+    "        break"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2cd0e731",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007171,
+     "end_time": "2025-12-13T12:24:38.242926",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.235755",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Model Architecture"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "1fd4f784",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007122,
+     "end_time": "2025-12-13T12:24:38.257138",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.250016",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Bidirectional RNN (Scratch Model)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "id": "d6e1219f",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.272567Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.272324Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.277139Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.276529Z"
+    },
+    "papermill": {
+     "duration": 0.014395,
+     "end_time": "2025-12-13T12:24:38.278589",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.264194",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "class BiRNN(nn.Module):\n",
+    "    def __init__(self, vocab, embed=64, hidden=128):\n",
+    "        super().__init__()\n",
+    "        self.emb = nn.Embedding(vocab, embed, padding_idx=0)\n",
+    "        self.rnn = nn.RNN(embed, hidden, bidirectional=True, batch_first=True)\n",
+    "        self.fc8 = nn.Linear(hidden*2, 8)\n",
+    "        self.fc3 = nn.Linear(hidden*2, 3)\n",
+    "\n",
+    "    def forward(self, x):\n",
+    "        x = self.emb(x)\n",
+    "        h, _ = self.rnn(x)\n",
+    "        return self.fc8(h), self.fc3(h)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "5173b3aa",
+   "metadata": {
+    "papermill": {
+     "duration": 0.00708,
+     "end_time": "2025-12-13T12:24:38.292983",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.285903",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Bidirectional LSTM (Scratch Model)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "id": "8eb8aa7e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.309012Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.308356Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.313672Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.312889Z"
+    },
+    "papermill": {
+     "duration": 0.014832,
+     "end_time": "2025-12-13T12:24:38.315165",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.300333",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "class BiLSTM(nn.Module):\n",
+    "    def __init__(self, vocab, embed=64, hidden=128):\n",
+    "        super().__init__()\n",
+    "        self.emb = nn.Embedding(vocab, embed, padding_idx=0)\n",
+    "        self.lstm = nn.LSTM(embed, hidden, bidirectional=True, batch_first=True)\n",
+    "        self.fc8 = nn.Linear(hidden*2, 8)\n",
+    "        self.fc3 = nn.Linear(hidden*2, 3)\n",
+    "\n",
+    "    def forward(self, x):\n",
+    "        x = self.emb(x)\n",
+    "        h, _ = self.lstm(x)\n",
+    "        return self.fc8(h), self.fc3(h)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "39341aaf",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007034,
+     "end_time": "2025-12-13T12:24:38.329540",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.322506",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Selecting Device (GPU/CPU)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "566ad536",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007157,
+     "end_time": "2025-12-13T12:24:38.343893",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.336736",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Checking Available Device"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "id": "49b36857",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.398880Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.398562Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.504751Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.503773Z"
+    },
+    "papermill": {
+     "duration": 0.155235,
+     "end_time": "2025-12-13T12:24:38.506367",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.351132",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "CUDA Available: True\n",
+      "GPU Count: 2\n",
+      "GPU 0: Tesla T4\n",
+      "GPU 1: Tesla T4\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Check CUDA GPUs available\n",
+    "print(\"CUDA Available:\", torch.cuda.is_available())\n",
+    "print(\"GPU Count:\", torch.cuda.device_count())\n",
+    "\n",
+    "if torch.cuda.is_available():\n",
+    "    for i in range(torch.cuda.device_count()):\n",
+    "        print(f\"GPU {i}: {torch.cuda.get_device_name(i)}\")\n",
+    "else:\n",
+    "    print(\"No GPU — CPU will be used.\")\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cdbf6f6f",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007383,
+     "end_time": "2025-12-13T12:24:38.521663",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.514280",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Selecting GPU if available"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "8c2be785",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.537530Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.537289Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.542644Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.541729Z"
+    },
+    "papermill": {
+     "duration": 0.01537,
+     "end_time": "2025-12-13T12:24:38.544337",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.528967",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Using GPU: Tesla T4\n"
+     ]
+    }
+   ],
+   "source": [
+    "def get_device():\n",
+    "    if torch.cuda.is_available():\n",
+    "        print(f\"Using GPU: {torch.cuda.get_device_name(0)}\")\n",
+    "        return torch.device(\"cuda\")\n",
+    "    else:\n",
+    "        print(\"Using CPU\")\n",
+    "        return torch.device(\"cpu\")\n",
+    "\n",
+    "device = get_device()\n",
+    "torch.backends.cudnn.benchmark = True"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "65923cf2",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007246,
+     "end_time": "2025-12-13T12:24:38.558941",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.551695",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Loss Function, and Metrics"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "1d894017",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.574900Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.574672Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.578394Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.577735Z"
+    },
+    "papermill": {
+     "duration": 0.013648,
+     "end_time": "2025-12-13T12:24:38.579981",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.566333",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "criterion = nn.CrossEntropyLoss(ignore_index=-1)\n",
+    "\n",
+    "def harmonic_mean(a, b):\n",
+    "    return 2 / (1/a + 1/b)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "520e8519",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.596558Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.596342Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.602699Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.601947Z"
+    },
+    "papermill": {
+     "duration": 0.016664,
+     "end_time": "2025-12-13T12:24:38.604409",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.587745",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "def evaluate(model, dataLoader):\n",
+    "    model.eval()\n",
+    "    \n",
+    "    all8_true, all8_pred = [], []\n",
+    "    all3_true, all3_pred = [], []\n",
+    "\n",
+    "    with torch.no_grad():\n",
+    "        for x, y8, y3 in dataLoader:\n",
+    "            x = x.to(device)\n",
+    "            y8 = y8.to(device)\n",
+    "            y3 = y3.to(device)\n",
+    "\n",
+    "            p8, p3 = model(x)\n",
+    "\n",
+    "            pred8 = p8.argmax(-1).reshape(-1)\n",
+    "            pred3 = p3.argmax(-1).reshape(-1)\n",
+    "\n",
+    "            mask8 = (y8.reshape(-1) != -1)\n",
+    "            mask3 = (y3.reshape(-1) != -1)\n",
+    "\n",
+    "            all8_true.extend(y8.reshape(-1)[mask8].tolist())\n",
+    "            all8_pred.extend(pred8[mask8].tolist())\n",
+    "\n",
+    "            all3_true.extend(y3.reshape(-1)[mask3].tolist())\n",
+    "            all3_pred.extend(pred3[mask3].tolist())\n",
+    "\n",
+    "    f18 = f1_score(all8_true, all8_pred, average=\"macro\")\n",
+    "    f13 = f1_score(all3_true, all3_pred, average=\"macro\")\n",
+    "    hm = harmonic_mean(f18, f13)\n",
+    "\n",
+    "    return f18, f13, hm"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "54529ea8",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007376,
+     "end_time": "2025-12-13T12:24:38.619329",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.611953",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Training Loop"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "e9041585",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.635031Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.634827Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.642939Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.642255Z"
+    },
+    "papermill": {
+     "duration": 0.017872,
+     "end_time": "2025-12-13T12:24:38.644637",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.626765",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "def train_model(model, optimizer, criterion, epochs=3):\n",
+    "    \n",
+    "    model = model.to(device)\n",
+    "\n",
+    "    for ep in range(epochs):\n",
+    "        model.train()\n",
+    "        batch_bar = tqdm(trainLoader, desc=f\"Epoch {ep+1}/{epochs}\", mininterval=0.5)\n",
+    "\n",
+    "        total_loss_ep = 0.0\n",
+    "        total_batches = 0\n",
+    "\n",
+    "        for x, y8, y3 in batch_bar:\n",
+    "            x = x.to(device)\n",
+    "            y8 = y8.to(device)\n",
+    "            y3 = y3.to(device)\n",
+    "\n",
+    "            optimizer.zero_grad()\n",
+    "            p8, p3 = model(x)\n",
+    "\n",
+    "            # compute losses\n",
+    "            loss8 = criterion(p8.reshape(-1,8), y8.reshape(-1))\n",
+    "            loss3 = criterion(p3.reshape(-1,3), y3.reshape(-1))\n",
+    "            total_loss = loss8 + loss3\n",
+    "\n",
+    "            total_loss.backward()\n",
+    "            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)\n",
+    "            optimizer.step()\n",
+    "\n",
+    "            # track batch loss\n",
+    "            total_loss_ep += total_loss.item()\n",
+    "            total_batches += 1\n",
+    "\n",
+    "            # tqdm update \n",
+    "            batch_bar.set_postfix({\n",
+    "                \"loss8\": f\"{loss8.item():.4f}\",\n",
+    "                \"loss3\": f\"{loss3.item():.4f}\",\n",
+    "                \"total\": f\"{total_loss.item():.4f}\"\n",
+    "            })\n",
+    "\n",
+    "        # Validation\n",
+    "        f18, f13, hm = evaluate(model, valLoader)\n",
+    "\n",
+    "        avg_loss = total_loss_ep / total_batches\n",
+    "\n",
+    "        print(f\"Epoch {ep+1} Validation: F1-8={f18:.4f} | F1-3={f13:.4f} | HM={hm:.4f}\\n\")\n",
+    "\n",
+    "        #  TrackIO logging \n",
+    "        trackio.log({\n",
+    "            \"epoch\": ep+1,\n",
+    "            \"loss_epoch\": avg_loss,\n",
+    "            \"loss8\": loss8.item(),\n",
+    "            \"loss3\": loss3.item(),\n",
+    "            \"val_F1_8\": f18,\n",
+    "            \"val_F1_3\": f13,\n",
+    "            \"val_harmonic_mean\": hm\n",
+    "        })\n",
+    "    trackio.finish()\n",
+    "    print(f\"Training finished & Logged to Trackio.\\n\")\n",
+    "    return model"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "dd7d99d3",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007334,
+     "end_time": "2025-12-13T12:24:38.659889",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.652555",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Training the Models"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "3a1b34fd",
+   "metadata": {
+    "papermill": {
+     "duration": 0.00726,
+     "end_time": "2025-12-13T12:24:38.674933",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.667673",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "### Switcher / Control - Training and Submission"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "id": "be66e3a6",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.691056Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.690592Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.693949Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.693244Z"
+    },
+    "papermill": {
+     "duration": 0.013131,
+     "end_time": "2025-12-13T12:24:38.695579",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.682448",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "canTrain = True\n",
+    "canTrainBiRNN = True\n",
+    "canTrainBiLSTM = True"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "348d7e0d",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007284,
+     "end_time": "2025-12-13T12:24:38.710501",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.703217",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Trackio Initialization and logging"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "id": "c2c53a79",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.727030Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.726363Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.732515Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.731852Z"
+    },
+    "papermill": {
+     "duration": 0.016023,
+     "end_time": "2025-12-13T12:24:38.734102",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.718079",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "KAGGLE_USERNAME = \"vivek0620\"\n",
+    "FRAMEWORK = \"pytorch\"\n",
+    "\n",
+    "def trackioInit(run_name, group, optimizer, batch_size=1, extra_config=None):\n",
+    "\n",
+    "    # Base config\n",
+    "    config = {\n",
+    "        \"batch_size\": batch_size,\n",
+    "        \"optimizer\": optimizer.__class__.__name__,\n",
+    "        \"learning_rate\": optimizer.param_groups[0][\"lr\"]\n",
+    "    }\n",
+    "\n",
+    "    # Merge extra hyperparameters, if provided\n",
+    "    if extra_config is not None:\n",
+    "        config.update(extra_config)\n",
+    "\n",
+    "    # Initialize TrackIO\n",
+    "    trackio.init(\n",
+    "        project=\"25-t3-nppe2\",\n",
+    "        space_id=\"bytescode/dlgenai-nppe\",\n",
+    "        name=run_name,\n",
+    "        group=group,\n",
+    "        config=config\n",
+    "    )\n",
+    "\n",
+    "    print(f\"[TrackIO] Run initialized → {run_name} (Group: {group})\")\n",
+    "\n",
+    "\n",
+    "def get_model_params(model, optimizer):\n",
+    "    \n",
+    "    embed_dim = model.emb.embedding_dim\n",
+    "    lr = optimizer.param_groups[0][\"lr\"]\n",
+    "    \n",
+    "    # detect whether model has LSTM or RNN\n",
+    "    if hasattr(model, \"lstm\"):\n",
+    "        hidden_dim = model.lstm.hidden_size\n",
+    "        layers = model.lstm.num_layers\n",
+    "        model_type = \"BiLSTM\"\n",
+    "    elif hasattr(model, \"rnn\"):\n",
+    "        hidden_dim = model.rnn.hidden_size\n",
+    "        layers = model.rnn.num_layers\n",
+    "        model_type = \"BiRNN\"\n",
+    "    else:\n",
+    "        raise ValueError(\"Model must contain either lstm or rnn attribute!\")\n",
+    "\n",
+    "    return model_type, hidden_dim, embed_dim, layers, lr"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "006e9a2f",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007396,
+     "end_time": "2025-12-13T12:24:38.749133",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.741737",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Training execution"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "id": "589ba39d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.765512Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.764818Z",
+     "iopub.status.idle": "2025-12-13T12:24:38.783127Z",
+     "shell.execute_reply": "2025-12-13T12:24:38.782174Z"
+    },
+    "papermill": {
+     "duration": 0.027935,
+     "end_time": "2025-12-13T12:24:38.784701",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.756766",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "vocab_size = len(aa2id) + 1\n",
+    "\n",
+    "birnn = BiRNN(vocab_size)\n",
+    "bilstm = BiLSTM(vocab_size)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "03d7926f",
+   "metadata": {
+    "papermill": {
+     "duration": 0.007169,
+     "end_time": "2025-12-13T12:24:38.799423",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.792254",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "### Training Bi-RNN & uploading to kagglehub"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "id": "6a1fcb82",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:24:38.815174Z",
+     "iopub.status.busy": "2025-12-13T12:24:38.814947Z",
+     "iopub.status.idle": "2025-12-13T12:25:16.327688Z",
+     "shell.execute_reply": "2025-12-13T12:25:16.326654Z"
+    },
+    "papermill": {
+     "duration": 37.522644,
+     "end_time": "2025-12-13T12:25:16.329538",
+     "exception": false,
+     "start_time": "2025-12-13T12:24:38.806894",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Training BiRNN...\n",
+      "sstBiRNN-h128_e64_l1_lr0.001\n",
+      "* Trackio project initialized: 25-t3-nppe2\n",
+      "* Trackio metrics will be synced to Hugging Face Dataset: bytescode/dlgenai-nppe-dataset\n",
+      "* Found existing space: https://huggingface.co/spaces/bytescode/dlgenai-nppe\n",
+      "* View dashboard by going to: https://bytescode-dlgenai-nppe.hf.space/\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div><iframe src=\"https://bytescode-dlgenai-nppe.hf.space/\" width=\"100%\" height=\"1000px\" allow=\"autoplay; camera; microphone; clipboard-read; clipboard-write;\" frameborder=\"0\" allowfullscreen></iframe></div>"
+      ],
+      "text/plain": [
+       "<IPython.core.display.HTML object>"
+      ]
+     },
+     "metadata": {},
+     "output_type": "display_data"
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "* Created new run: sstBiRNN-h128_e64_l1_lr0.001\n",
+      "[TrackIO] Run initialized → sstBiRNN-h128_e64_l1_lr0.001 (Group: baseline_models)\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Epoch 1/1: 100%|██████████| 6535/6535 [00:33<00:00, 197.07it/s, loss8=1.4214, loss3=0.8279, total=2.2493]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch 1 Validation: F1-8=0.2746 | F1-3=0.6387 | HM=0.3841\n",
+      "\n",
+      "* Run finished. Uploading logs to Trackio (please wait...)\n",
+      "Training finished & Logged to Trackio.\n",
+      "\n",
+      "Saved model: sstBiRNN-h128_e64_l1_lr0.001.pth\n"
+     ]
+    }
+   ],
+   "source": [
+    "if canTrain and canTrainBiRNN:\n",
+    "    print(\"Training BiRNN...\\n\", end='')\n",
+    "\n",
+    "    # Optimizer\n",
+    "    optimizer = torch.optim.Adam(birnn.parameters(), lr=1e-3)\n",
+    "    epochs = 1\n",
+    "    \n",
+    "    model_type, hidden_dim, embed_dim, layers, lr = get_model_params(birnn, optimizer=optimizer)\n",
+    "    \n",
+    "    MODEL = f\"sst{model_type}\" \n",
+    "    VARIATION = f\"h{hidden_dim}_e{embed_dim}_l{layers}_lr{lr}\"\n",
+    "    name = f\"{MODEL}-{VARIATION}\"\n",
+    "\n",
+    "    print(name)\n",
+    "    \n",
+    "    # TrackIO logging\n",
+    "    trackioInit(\n",
+    "        run_name=name,\n",
+    "        group=\"baseline_models\",\n",
+    "        optimizer=optimizer,\n",
+    "        batch_size=1,\n",
+    "        extra_config={\n",
+    "            \"epochs\": epochs,\n",
+    "            \"model_type\": model_type\n",
+    "        }\n",
+    "    )\n",
+    "    \n",
+    "    # Train model\n",
+    "    birnn_model = train_model(birnn, optimizer=optimizer, criterion=criterion, epochs=epochs)\n",
+    "    \n",
+    "    # Save model weights\n",
+    "    torch.save(birnn_model.module if isinstance(birnn_model, torch.nn.DataParallel)\n",
+    "    else birnn_model, f\"{name}.pth\")\n",
+    "    print(\"Saved model:\", f\"{name}.pth\")\n",
+    "\n",
+    "    # Upload model to Kaggle Hub\n",
+    "    handle = f\"{KAGGLE_USERNAME}/{MODEL}/{FRAMEWORK}/{VARIATION}\"\n",
+    "    #kagglehub.model_upload(handle, model_path, version_notes=f\"{MODEL} trained version : {VARIATION}\")\n",
+    "    #print(f\"Uploaded {MODEL} model to Kaggle Hub: {handle}\")\n",
+    "\n",
+    "else:\n",
+    "    print(\"Skkiping Training--Going for Submission.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c55b76f5",
+   "metadata": {
+    "papermill": {
+     "duration": 0.33842,
+     "end_time": "2025-12-13T12:25:16.969767",
+     "exception": false,
+     "start_time": "2025-12-13T12:25:16.631347",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "### Training Bi-LSTM & uploading to kagglehub"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "id": "192112e5",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:25:17.548709Z",
+     "iopub.status.busy": "2025-12-13T12:25:17.548000Z",
+     "iopub.status.idle": "2025-12-13T12:27:14.667420Z",
+     "shell.execute_reply": "2025-12-13T12:27:14.666436Z"
+    },
+    "papermill": {
+     "duration": 117.411138,
+     "end_time": "2025-12-13T12:27:14.669163",
+     "exception": false,
+     "start_time": "2025-12-13T12:25:17.258025",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Training BiLSTM...\n",
+      "sst-BiRNN-h128_e64_l1_lr0.001\n",
+      "* Created new run: sst-BiRNN-h128_e64_l1_lr0.001\n",
+      "[TrackIO] Run initialized → sst-BiRNN-h128_e64_l1_lr0.001 (Group: baseline_models)\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Epoch 1/3: 100%|██████████| 6535/6535 [00:36<00:00, 178.12it/s, loss8=0.5280, loss3=0.3116, total=0.8395]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch 1 Validation: F1-8=0.2846 | F1-3=0.6679 | HM=0.3991\n",
+      "\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Epoch 2/3: 100%|██████████| 6535/6535 [00:36<00:00, 178.68it/s, loss8=1.1827, loss3=0.7182, total=1.9010]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch 2 Validation: F1-8=0.2980 | F1-3=0.6776 | HM=0.4140\n",
+      "\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Epoch 3/3: 100%|██████████| 6535/6535 [00:36<00:00, 179.50it/s, loss8=0.7667, loss3=0.4075, total=1.1743]\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch 3 Validation: F1-8=0.2985 | F1-3=0.6798 | HM=0.4148\n",
+      "\n",
+      "* Run finished. Uploading logs to Trackio (please wait...)\n",
+      "Training finished & Logged to Trackio.\n",
+      "\n",
+      "Saved model: sst-BiRNN-h128_e64_l1_lr0.001.pth\n"
+     ]
+    }
+   ],
+   "source": [
+    "if canTrain and canTrainBiLSTM:\n",
+    "    print(\"Training BiLSTM...\\n\", end='')\n",
+    "\n",
+    "    # Optimizer\n",
+    "    optimizer = torch.optim.Adam(bilstm.parameters(), lr=1e-3)\n",
+    "    epochs = 3\n",
+    "    \n",
+    "    model_type, hidden_dim, embed_dim, layers, lr = get_model_params(birnn, optimizer=optimizer)\n",
+    "    \n",
+    "    MODEL = f\"sst-{model_type}\" \n",
+    "    VARIATION = f\"h{hidden_dim}_e{embed_dim}_l{layers}_lr{lr}\"\n",
+    "    name = f\"{MODEL}-{VARIATION}\"\n",
+    "\n",
+    "    print(name)\n",
+    "    \n",
+    "    # TrackIO logging\n",
+    "    trackioInit(\n",
+    "        run_name=name,\n",
+    "        group=\"baseline_models\",\n",
+    "        optimizer=optimizer,\n",
+    "        batch_size=1,\n",
+    "        extra_config={\n",
+    "            \"epochs\": epochs,\n",
+    "            \"model_type\": model_type\n",
+    "        }\n",
+    "    )\n",
+    "    \n",
+    "    # Train model\n",
+    "    bilstm_model = train_model(bilstm, optimizer=optimizer, criterion=criterion, epochs=epochs)\n",
+    "\n",
+    "    # Save model weights\n",
+    "    torch.save(bilstm_model.module if isinstance(bilstm_model, torch.nn.DataParallel)\n",
+    "    else bilstm_model, f\"{name}.pth\")\n",
+    "    print(\"Saved model:\", f\"{name}.pth\")\n",
+    "    \n",
+    "    # Upload model to Kaggle Hub\n",
+    "    handle = f\"{KAGGLE_USERNAME}/{MODEL}/{FRAMEWORK}/{VARIATION}\"\n",
+    "    #kagglehub.model_upload(handle, model_path, version_notes=f\"{MODEL} trained version : {VARIATION}\")\n",
+    "    #print(f\"Uploaded {MODEL} model to Kaggle Hub: {handle}\")\n",
+    "\n",
+    "else:\n",
+    "    print(\"Skkiping Training--Going for Submission.\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b3f23168",
+   "metadata": {
+    "papermill": {
+     "duration": 1.256609,
+     "end_time": "2025-12-13T12:27:17.169687",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:15.913078",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "markdown",
+   "id": "808361c7",
+   "metadata": {
+    "papermill": {
+     "duration": 1.172289,
+     "end_time": "2025-12-13T12:27:19.577324",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:18.405035",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Inference Of Models"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c8898b48",
+   "metadata": {
+    "papermill": {
+     "duration": 1.291119,
+     "end_time": "2025-12-13T12:27:22.121450",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:20.830331",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Model Comparision"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "id": "a6885bd5",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:27:24.621557Z",
+     "iopub.status.busy": "2025-12-13T12:27:24.620927Z",
+     "iopub.status.idle": "2025-12-13T12:27:28.445235Z",
+     "shell.execute_reply": "2025-12-13T12:27:28.444355Z"
+    },
+    "papermill": {
+     "duration": 5.151393,
+     "end_time": "2025-12-13T12:27:28.447358",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:23.295965",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "=== MODEL COMPARISON ===\n",
+      "\n",
+      "BiRNN  → F1-8=0.2746 | F1-3=0.6387 | HM=0.3841\n",
+      "BiLSTM → F1-8=0.2985 | F1-3=0.6798 | HM=0.4148\n",
+      "\n",
+      ">>> BiLSTM is better overall.\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(\"=== MODEL COMPARISON ===\\n\")\n",
+    "\n",
+    "birnn_f18, birnn_f13, birnn_hm = evaluate(birnn_model, valLoader)\n",
+    "bilstm_f18, bilstm_f13, bilstm_hm = evaluate(bilstm_model, valLoader)\n",
+    "\n",
+    "print(f\"BiRNN  → F1-8={birnn_f18:.4f} | F1-3={birnn_f13:.4f} | HM={birnn_hm:.4f}\")\n",
+    "print(f\"BiLSTM → F1-8={bilstm_f18:.4f} | F1-3={bilstm_f13:.4f} | HM={bilstm_hm:.4f}\")\n",
+    "\n",
+    "if bilstm_hm > birnn_hm:\n",
+    "    print(\"\\n>>> BiLSTM is better overall.\")\n",
+    "else:\n",
+    "    print(\"\\n>>> BiRNN is better overall.\\n\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0192f626",
+   "metadata": {
+    "papermill": {
+     "duration": 1.299877,
+     "end_time": "2025-12-13T12:27:30.938639",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:29.638762",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Selection Best Model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "d15dfac1",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:27:33.400580Z",
+     "iopub.status.busy": "2025-12-13T12:27:33.400198Z",
+     "iopub.status.idle": "2025-12-13T12:27:33.404800Z",
+     "shell.execute_reply": "2025-12-13T12:27:33.403941Z"
+    },
+    "papermill": {
+     "duration": 1.239499,
+     "end_time": "2025-12-13T12:27:33.406807",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:32.167308",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "\n",
+      ">>> Best model selected: BiLSTM\n"
+     ]
+    }
+   ],
+   "source": [
+    "if bilstm_hm > birnn_hm:\n",
+    "    best_model = bilstm_model\n",
+    "    best_name = \"BiLSTM\"\n",
+    "else:\n",
+    "    best_model = birnn_model\n",
+    "    best_name = \"BiRNN\"\n",
+    "\n",
+    "print(f\"\\n>>> Best model selected: {best_name}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2f0bcd46",
+   "metadata": {
+    "papermill": {
+     "duration": 1.241567,
+     "end_time": "2025-12-13T12:27:35.913324",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:34.671757",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "# Submission"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "id": "b8f9abd0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:27:38.330043Z",
+     "iopub.status.busy": "2025-12-13T12:27:38.329707Z",
+     "iopub.status.idle": "2025-12-13T12:27:38.336066Z",
+     "shell.execute_reply": "2025-12-13T12:27:38.335266Z"
+    },
+    "papermill": {
+     "duration": 1.196016,
+     "end_time": "2025-12-13T12:27:38.337907",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:37.141891",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "def predict(model, df):\n",
+    "    model.eval()\n",
+    "    seqs8, seqs3 = [], []\n",
+    "\n",
+    "    with torch.no_grad():\n",
+    "        for seq in df[\"seq\"]:\n",
+    "            x = torch.tensor([aa2id.get(a, aa2id[\"X\"]) for a in seq]).unsqueeze(0).to(device)\n",
+    "            p8, p3 = model(x)\n",
+    "\n",
+    "            pred8 = p8.argmax(-1)[0].tolist()\n",
+    "            pred3 = p3.argmax(-1)[0].tolist()\n",
+    "\n",
+    "            # decode integers → characters\n",
+    "            s8 = \"\".join(id2sst8[i] for i in pred8)\n",
+    "            s3 = \"\".join(id2sst3[i] for i in pred3)\n",
+    "\n",
+    "            seqs8.append(s8)\n",
+    "            seqs3.append(s3)\n",
+    "\n",
+    "    return seqs8, seqs3"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "7986681a",
+   "metadata": {
+    "papermill": {
+     "duration": 1.286357,
+     "end_time": "2025-12-13T12:27:40.843942",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:39.557585",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Predict (sst8 & sst3)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "8bf41060",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:27:43.302282Z",
+     "iopub.status.busy": "2025-12-13T12:27:43.301943Z",
+     "iopub.status.idle": "2025-12-13T12:27:47.127197Z",
+     "shell.execute_reply": "2025-12-13T12:27:47.126254Z"
+    },
+    "papermill": {
+     "duration": 5.110169,
+     "end_time": "2025-12-13T12:27:47.129251",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:42.019082",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "test_s8, test_s3 = predict(best_model, testDf)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "a948fe84",
+   "metadata": {
+    "papermill": {
+     "duration": 1.288547,
+     "end_time": "2025-12-13T12:27:49.604849",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:48.316302",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "source": [
+    "## Creating Submission file"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "id": "87c9227b",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2025-12-13T12:27:52.076075Z",
+     "iopub.status.busy": "2025-12-13T12:27:52.075301Z",
+     "iopub.status.idle": "2025-12-13T12:27:52.114861Z",
+     "shell.execute_reply": "2025-12-13T12:27:52.114039Z"
+    },
+    "papermill": {
+     "duration": 1.277044,
+     "end_time": "2025-12-13T12:27:52.116581",
+     "exception": false,
+     "start_time": "2025-12-13T12:27:50.839537",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Saved submission.csv\n",
+      "\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>id</th>\n",
+       "      <th>sst8</th>\n",
+       "      <th>sst3</th>\n",
+       "      <th>Usage</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>0</td>\n",
+       "      <td>CCCCCCHHHHHHHHHHHHHHHHHCSEEEEEECCCCCCCEEEEEECT...</td>\n",
+       "      <td>CCCCCCHHHCHHHHHHHHHHHHHCCEEEEEECCCCCCCCEEEEECC...</td>\n",
+       "      <td>Private</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>1</td>\n",
+       "      <td>CCCCCCCCCCCCEEEEEESTTEEEEEEECTTHHHHHHHHCCCTTHH...</td>\n",
+       "      <td>CCCCCCCCCCCCEEEEECCCCEEEEEEECCCHHHHHHHHCCCCHHH...</td>\n",
+       "      <td>Private</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>2</td>\n",
+       "      <td>CCHHHHHHHHTHHHHHHHHHHHHHHEHHHHHHHHHCCHHHHHHHHH...</td>\n",
+       "      <td>CCHHHHHHHHCHHHHHHHHHHHHHHEHHHHHHHHHCCCHHHHHHHH...</td>\n",
+       "      <td>Public</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>3</td>\n",
+       "      <td>CCCCHHHHHCCCHCHHHHHHHHHHHHHHHCCEEEHHHHHHHHHHHH...</td>\n",
+       "      <td>CCCCCHHHHCCCHCHHHHHHHHHHHHHHHCCEEECHHHHHHHHCHH...</td>\n",
+       "      <td>Private</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>4</td>\n",
+       "      <td>CCEEEEEECCCTHHHHHHHHHHHHHHHCCEEEECTTTEEEEECSEE...</td>\n",
+       "      <td>CCEEEEEECCCCHHHHHHHHHHHHHHHCCCCEECCCCEEEEECCCE...</td>\n",
+       "      <td>Private</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "   id                                               sst8  \\\n",
+       "0   0  CCCCCCHHHHHHHHHHHHHHHHHCSEEEEEECCCCCCCEEEEEECT...   \n",
+       "1   1  CCCCCCCCCCCCEEEEEESTTEEEEEEECTTHHHHHHHHCCCTTHH...   \n",
+       "2   2  CCHHHHHHHHTHHHHHHHHHHHHHHEHHHHHHHHHCCHHHHHHHHH...   \n",
+       "3   3  CCCCHHHHHCCCHCHHHHHHHHHHHHHHHCCEEEHHHHHHHHHHHH...   \n",
+       "4   4  CCEEEEEECCCTHHHHHHHHHHHHHHHCCEEEECTTTEEEEECSEE...   \n",
+       "\n",
+       "                                                sst3    Usage  \n",
+       "0  CCCCCCHHHCHHHHHHHHHHHHHCCEEEEEECCCCCCCCEEEEECC...  Private  \n",
+       "1  CCCCCCCCCCCCEEEEECCCCEEEEEEECCCHHHHHHHHCCCCHHH...  Private  \n",
+       "2  CCHHHHHHHHCHHHHHHHHHHHHHHEHHHHHHHHHCCCHHHHHHHH...   Public  \n",
+       "3  CCCCCHHHHCCCHCHHHHHHHHHHHHHHHCCEEECHHHHHHHHCHH...  Private  \n",
+       "4  CCEEEEEECCCCHHHHHHHHHHHHHHHCCCCEECCCCEEEEECCCE...  Private  "
+      ]
+     },
+     "execution_count": 27,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "submission = sampleDf.copy()\n",
+    "\n",
+    "submission[\"sst8\"] = test_s8\n",
+    "submission[\"sst3\"] = test_s3\n",
+    "\n",
+    "submission.to_csv(\"submission.csv\", index=False)\n",
+    "print(\"Saved submission.csv\\n\")\n",
+    "\n",
+    "submission.head()"
+   ]
+  }
+ ],
+ "metadata": {
+  "kaggle": {
+   "accelerator": "nvidiaTeslaT4",
+   "dataSources": [
+    {
+     "databundleVersionId": 14858151,
+     "sourceId": 125543,
+     "sourceType": "competition"
+    },
+    {
+     "databundleVersionId": 14419560,
+     "modelInstanceId": 480466,
+     "sourceId": 637277,
+     "sourceType": "modelInstanceVersion"
+    }
+   ],
+   "dockerImageVersionId": 30746,
+   "isGpuEnabled": true,
+   "isInternetEnabled": true,
+   "language": "python",
+   "sourceType": "notebook"
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.13"
+  },
+  "papermill": {
+   "default_parameters": {},
+   "duration": 284.550413,
+   "end_time": "2025-12-13T12:27:56.214674",
+   "environment_variables": {},
+   "exception": null,
+   "input_path": "__notebook__.ipynb",
+   "output_path": "__notebook__.ipynb",
+   "parameters": {},
+   "start_time": "2025-12-13T12:23:11.664261",
+   "version": "2.5.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
